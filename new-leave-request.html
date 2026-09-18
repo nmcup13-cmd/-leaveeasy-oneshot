@@ -26,6 +26,12 @@
         <label for="reason">เหตุผลการลา</label>
         <textarea id="reason" placeholder="เล่าเหตุผลสั้น ๆ ให้หัวหน้าเข้าใจ"></textarea>
 
+        <div class="btn-row">
+          <button type="button" id="ปุ่มจัดประเภทAI" class="btn-ghost">ให้ AI ช่วยจัดประเภทการลา</button>
+        </div>
+        <p id="ป้ายAIประเภท" class="badge badge-ai hidden">ข้อเสนอจาก AI — โปรดตรวจสอบก่อนยืนยัน</p>
+        <div id="เตือนจัดประเภทAI" class="alert alert-error hidden"></div>
+
         <label for="leaveTypeId">ประเภทการลา</label>
         <select id="leaveTypeId">
           <option value="">— เลือกประเภทการลา —</option>

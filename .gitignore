@@ -28,6 +28,15 @@ desktop.ini
 js/ai-config.js
 
 
+# ── ชุดทดสอบ Playwright (สัปดาห์ที่ 9) ──
+# .env.test เก็บรหัสผ่านบัญชีทดสอบจริง ห้ามขึ้น GitHub — ใช้ .env.test.example เป็นแม่แบบแทน
+.env.test
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+
 # ─────────────────────────────────────────────────────────────
 # ✅ วิธีตรวจว่าใช้ได้จริง — ก่อน push ทุกครั้ง พิมพ์บอก Claude ว่า
 #

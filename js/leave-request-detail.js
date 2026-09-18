@@ -3,7 +3,7 @@
 // สัปดาห์ที่ 6: อ่านใบลาจริงจาก Firestore · ปุ่มอนุมัติ/ไม่อนุมัติแก้ status จริง
 // ─────────────────────────────────────────────────────────────
 
-import { db } from "./firebase-config.js";
+import { db, auth } from "./firebase-config.js";
 import {
   doc,
   getDoc,
@@ -228,8 +228,8 @@ function วาดความเห็น() {
     }).join("");
 }
 
-// ── ส่งความเห็นใหม่ (ยังเก็บในหน่วยความจำเท่านั้น — ยังไม่บันทึกลง Firestore) ──
-function ส่งความเห็น() {
+// ── ส่งความเห็นใหม่ — บันทึกจริงลงโฟลเดอร์ย่อย approvals ของใบนี้ (US-05) ──
+async function ส่งความเห็น() {
   var ช่อง = document.getElementById("ข้อความความเห็น");
   var เตือน = document.getElementById("เตือนความเห็น");
   var ข้อความ = ช่อง.value.trim();
@@ -239,16 +239,34 @@ function ส่งความเห็น() {
     เตือน.classList.remove("hidden");
     return;
   }
+  if (!auth.currentUser) {
+    เตือน.textContent = "⚠️ เซสชันหมดอายุ — กรุณาล็อกอินใหม่ก่อนส่งความเห็น";
+    เตือน.classList.remove("hidden");
+    return;
+  }
   เตือน.classList.add("hidden");
 
-  // สัปดาห์ที่ 6 ยังไม่มีล็อกอิน จึงสมมติว่าผู้เขียนคือ สมหญิง รักงาน
-  ความเห็น.push({
-    id: "ap-ใหม่-" + Date.now(),
-    requestId: ใบ.id,
-    authorId: "u002", authorName: "สมหญิง รักงาน",
+  var ปุ่มส่ง = document.getElementById("ปุ่มส่งความเห็น");
+  ปุ่มส่ง.disabled = true;
+
+  var รายการใหม่ = {
+    authorId: auth.currentUser.uid,
+    authorName: auth.currentUser.displayName || auth.currentUser.email,
     message: ข้อความ,
     createdAt: เวลาตอนนี้(),
-  });
+  };
+
+  try {
+    await addDoc(collection(db, "leaveRequests", รหัสใบลา, "approvals"), รายการใหม่);
+  } catch (err) {
+    เตือน.textContent = "⚠️ ส่งความเห็นไม่สำเร็จ: " + err.message;
+    เตือน.classList.remove("hidden");
+    ปุ่มส่ง.disabled = false;
+    return;
+  }
+
+  ความเห็น.push(รายการใหม่);
   ช่อง.value = "";
   วาดความเห็น();
+  ปุ่มส่ง.disabled = false;
 }

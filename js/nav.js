@@ -32,6 +32,7 @@ var ที่วาง = document.getElementById("nav");
     var เมนู = เมนูพื้นฐาน.slice();
     if (โปรไฟล์.role === "employee") เมนู.push({ href: "new-leave-request", ชื่อ: "ยื่นใบลาใหม่" });
     if (โปรไฟล์.role === "hr") เมนู.push({ href: "leave-types", ชื่อ: "ประเภทการลา" });
+    if (โปรไฟล์.role === "hr") เมนู.push({ href: "dashboard", ชื่อ: "แดชบอร์ด" });
     วาดเมนู(เมนู);
 
     var navUser = document.getElementById("navUser");

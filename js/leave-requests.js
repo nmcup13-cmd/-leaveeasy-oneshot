@@ -4,7 +4,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { db } from "./firebase-config.js";
-import { collection, getDocs } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+import { collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 import { ผู้ใช้ปัจจุบัน } from "./current-user.js";
 
 const กล่อง = document.getElementById("ผลลัพธ์");
@@ -21,9 +21,15 @@ async function ซ่อนปุ่มยื่นใบลาถ้าไม�
 }
 
 async function โหลดข้อมูล() {
+  // ผู้ขอลาเห็นเฉพาะใบของตัวเอง · ผู้อนุมัติ/ฝ่ายบุคคลเห็นทุกใบ (ตาม ACL.md/US-08)
+  // ต้องกรองด้วย where ให้ตรงกับ Security Rules เสมอ ไม่งั้น list query ทั้ง collection จะถูกปฏิเสธ
+  var โปรไฟล์ = await ผู้ใช้ปัจจุบัน();
   var ใบลาทั้งหมด;
   try {
-    const สแนปช็อต = await getDocs(collection(db, "leaveRequests"));
+    var q = (โปรไฟล์ && โปรไฟล์.role === "employee")
+      ? query(collection(db, "leaveRequests"), where("requesterId", "==", โปรไฟล์.uid))
+      : collection(db, "leaveRequests");
+    const สแนปช็อต = await getDocs(q);
     ใบลาทั้งหมด = สแนปช็อต.docs.map(function (เอกสาร) {
       return Object.assign({ id: เอกสาร.id }, เอกสาร.data());
     });

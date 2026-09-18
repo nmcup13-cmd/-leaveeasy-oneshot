@@ -1,17 +1,42 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read: if request.auth != null;
+
+    function isSignedIn() {
+      return request.auth != null;
     }
 
+    // อ่าน role ของคนที่ล็อกอินอยู่จากโฟลเดอร์ users
+    function myRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isManagerOrHr() {
+      return isSignedIn() && myRole() in ['manager', 'hr'];
+    }
+
+    // 📁 users — โปรไฟล์ผู้ใช้ · อ่าน/สร้างได้เฉพาะไฟล์ของตัวเอง (ตาม US-08)
     match /users/{userId} {
-      allow create: if request.auth != null && request.auth.uid == userId
+      allow get: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() && request.auth.uid == userId
         && request.resource.data.role == 'employee';
     }
 
-    match /leaveRequests/{id} {
-      allow create: if request.auth != null
+    // 📁 leaveTypes — ทุกคนที่ล็อกอินอ่านได้ (ต้องใช้ในดรอปดาวน์ยื่นใบลา) · เพิ่ม/แก้/ลบ ได้เฉพาะฝ่ายบุคคล (ตาม ACL.md)
+    match /leaveTypes/{typeId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isSignedIn() && myRole() == 'hr';
+    }
+
+    // 📁 leaveRequests — ใบขอลา
+    match /leaveRequests/{requestId} {
+      // เห็นเฉพาะใบของตัวเอง หรือเป็นผู้อนุมัติ/ฝ่ายบุคคลถึงเห็นได้ทุกใบ (US-08)
+      allow read: if isSignedIn()
+        && (resource.data.requesterId == request.auth.uid || isManagerOrHr());
+
+      // สร้างได้เฉพาะแทนตัวเอง (ห้ามปลอม requesterId เป็นคนอื่น) เริ่มต้นต้องเป็นรอพิจารณาเสมอ
+      allow create: if isSignedIn()
+        && request.resource.data.requesterId == request.auth.uid
         && request.resource.data.status == 'รอพิจารณา'
         && request.resource.data.approverId == ''
         && request.resource.data.keys().hasAll(
@@ -19,21 +44,42 @@ service cloud.firestore {
            'approverId','approverName','leaveTypeId','leaveTypeName',
            'startDate','endDate','createdAt']);
 
-      allow update: if request.auth != null
-        && resource.data.status == 'รอพิจารณา'
+      allow update: if isSignedIn() && resource.data.status == 'รอพิจารณา'
         && (
+          // เปลี่ยนสถานะ — เฉพาะผู้อนุมัติ/ฝ่ายบุคคล และห้ามอนุมัติใบลาของตัวเอง
+          // (กฎกันผลประโยชน์ทับซ้อน — มาจาก ACL.md ไม่ได้อยู่ใน leaveeasy-spec.md ตัวต้นฉบับ)
           (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-            && request.resource.data.status in ['อนุมัติ', 'ไม่อนุมัติ'])
+            && request.resource.data.status in ['อนุมัติ', 'ไม่อนุมัติ']
+            && isManagerOrHr()
+            && resource.data.requesterId != request.auth.uid)
           ||
-          // สัปดาห์ที่ 8 — เขียนผลสรุปจาก AI เท่านั้น ห้ามแตะช่องอื่นรวมถึง status
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['aiSuggestion'])
+          // สัปดาห์ที่ 8 — บันทึกผลสรุปจาก AI เท่านั้น ห้ามแตะช่องอื่น เฉพาะผู้มีสิทธิ์พิจารณาใบนี้
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['aiSuggestion'])
+            && isManagerOrHr()
+            && resource.data.requesterId != request.auth.uid)
         );
 
-      allow delete: if request.auth != null && resource.data.status == 'รอพิจารณา';
+      // ลบได้เฉพาะเจ้าของใบเอง และต้องยังเป็นรอพิจารณาเท่านั้น
+      allow delete: if isSignedIn()
+        && resource.data.requesterId == request.auth.uid
+        && resource.data.status == 'รอพิจารณา';
 
-      // สัปดาห์ที่ 8 — บันทึกทุกครั้งที่เรียก AI สรุปใบลา (append-only ไม่มี update/delete)
+      // 📁 approvals — ความเห็นการอนุมัติ (append-only ไม่มี update/delete)
+      match /approvals/{approvalId} {
+        allow read: if isSignedIn()
+          && (get(/databases/$(database)/documents/leaveRequests/$(requestId)).data.requesterId == request.auth.uid
+              || isManagerOrHr());
+        allow create: if isSignedIn()
+          && request.resource.data.authorId == request.auth.uid
+          && (get(/databases/$(database)/documents/leaveRequests/$(requestId)).data.requesterId == request.auth.uid
+              || isManagerOrHr());
+      }
+
+      // 📁 aiLog — บันทึกทุกครั้งที่เรียก AI สรุปใบลา (append-only เฉพาะผู้มีสิทธิ์พิจารณาใบนี้)
       match /aiLog/{logId} {
-        allow create: if request.auth != null;
+        allow read: if isSignedIn() && isManagerOrHr();
+        allow create: if isSignedIn() && isManagerOrHr()
+          && get(/databases/$(database)/documents/leaveRequests/$(requestId)).data.requesterId != request.auth.uid;
       }
     }
   }

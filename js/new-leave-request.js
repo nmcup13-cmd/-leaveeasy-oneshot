@@ -10,14 +10,20 @@ import {
   getDocs,
   addDoc,
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+import { จัดประเภทลาด้วยAI } from "./ai-classify.js";
 
 var ฟอร์ม = document.getElementById("ฟอร์มใบลา");
+var ช่องเหตุผล = document.getElementById("reason");
 var ช่องประเภท = document.getElementById("leaveTypeId");
 var กล่องเตือน = document.getElementById("ข้อความเตือน");
 var ปุ่มบันทึก = document.getElementById("ปุ่มบันทึก");
+var ปุ่มจัดประเภทAI = document.getElementById("ปุ่มจัดประเภทAI");
+var ป้ายAIประเภท = document.getElementById("ป้ายAIประเภท");
+var เตือนจัดประเภทAI = document.getElementById("เตือนจัดประเภทAI");
 var ประเภททั้งหมด = [];
 
 โหลดประเภทการลา();
+ปุ่มจัดประเภทAI.addEventListener("click", จัดประเภทด้วยAI);
 
 async function โหลดประเภทการลา() {
   try {
@@ -42,6 +48,53 @@ async function โหลดประเภทการลา() {
     ช่องประเภท.appendChild(ตัวเลือก);
   });
 }
+
+// ── ปุ่ม "ให้ AI ช่วยจัดประเภทการลา" (US-09/สัปดาห์ที่ 8) ──
+// อ่านเหตุผลการลา + รายชื่อประเภทที่มีอยู่จริง (ประเภททั้งหมด ที่โหลดมาแล้ว) ส่งให้ AI เลือกให้
+// dropdown ต้องไม่ถูก disable และผู้ใช้ต้องแก้เองได้เสมอ · เรียกไม่สำเร็จ/หมดเวลาต้องไม่บล็อกการบันทึกใบลา
+async function จัดประเภทด้วยAI() {
+  var เหตุผล = ช่องเหตุผล.value.trim();
+  เตือนจัดประเภทAI.classList.add("hidden");
+  ป้ายAIประเภท.classList.add("hidden");
+
+  if (!เหตุผล) {
+    เตือนจัดประเภทAI.textContent = "⚠️ พิมพ์เหตุผลการลาก่อน จึงจะให้ AI ช่วยจัดประเภทได้";
+    เตือนจัดประเภทAI.classList.remove("hidden");
+    return;
+  }
+  if (ประเภททั้งหมด.length === 0) {
+    เตือนจัดประเภทAI.textContent = "⚠️ ยังไม่มีประเภทการลาในระบบให้ AI เลือก";
+    เตือนจัดประเภทAI.classList.remove("hidden");
+    return;
+  }
+
+  ปุ่มจัดประเภทAI.disabled = true;
+  var ข้อความเดิม = ปุ่มจัดประเภทAI.textContent;
+  ปุ่มจัดประเภทAI.textContent = "กำลังจัดประเภท…";
+
+  var ผล;
+  try {
+    ผล = await จัดประเภทลาด้วยAI(เหตุผล, ประเภททั้งหมด.map(function (t) { return t.name; }));
+  } finally {
+    ปุ่มจัดประเภทAI.disabled = false;
+    ปุ่มจัดประเภทAI.textContent = ข้อความเดิม;
+  }
+
+  if (!ผล.สำเร็จ) {
+    เตือนจัดประเภทAI.textContent = "⚠️ " + ผล.เหตุผล + " — ยังเลือกประเภทการลาเองและกดบันทึกได้ตามปกติ";
+    เตือนจัดประเภทAI.classList.remove("hidden");
+    return; // ไม่เปลี่ยนค่า dropdown เดิม
+  }
+
+  var ประเภทที่เลือก = ประเภททั้งหมด.find(function (t) { return t.name === ผล.ชื่อประเภท; });
+  ช่องประเภท.value = ประเภทที่เลือก.id;
+  ป้ายAIประเภท.classList.remove("hidden");
+}
+
+// ผู้ใช้แก้ไขประเภทการลาเองเมื่อไร ป้าย "ข้อเสนอจาก AI" ของค่าก่อนหน้าถือว่าไม่ตรงกับค่าปัจจุบันแล้ว
+ช่องประเภท.addEventListener("change", function () {
+  ป้ายAIประเภท.classList.add("hidden");
+});
 
 ฟอร์ม.addEventListener("submit", function (e) {
   e.preventDefault();
